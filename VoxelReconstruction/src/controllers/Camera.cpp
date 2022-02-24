@@ -195,6 +195,93 @@ void Camera::onMouse(
 	}
 }
 
+bool Camera::detIntrinsics(const string& data_path, const string& checker_vid_fname, const string& out_fname)
+{
+	VideoCapture video = VideoCapture(data_path + checker_vid_fname);
+
+	video.set(CAP_PROP_POS_AVI_RATIO, 1);  // Go to the end of the video; 1 = 100%
+	long frameCount = (long)video.get(CAP_PROP_POS_FRAMES);
+
+
+	int cb_width = 0, cb_height = 0;
+	int cb_square_size = 0;
+
+	// Read the checkerboard properties (XML)
+	FileStorage fs;
+	fs.open(data_path + ".." + string(PATH_SEP) + General::CBConfigFile, FileStorage::READ);
+	if (fs.isOpened())
+	{
+		fs["CheckerBoardWidth"] >> cb_width;
+		fs["CheckerBoardHeight"] >> cb_height;
+		fs["CheckerBoardSquareSize"] >> cb_square_size;
+	}
+	fs.release();
+
+	// Precalculate world-space positions
+	std::vector<cv::Point3f> worldSpace;
+	for (int i = 0; i < cb_width; i++)
+	{
+		for (int j = 0; j < cb_height; j++)
+		{
+			worldSpace.push_back(cv::Point3f(j * cb_square_size, i * cb_square_size, 0));
+		}
+	}
+
+	// Image points
+	uint32_t imageCount = 0;
+	std::vector<std::vector<cv::Point2f>> imagePoints; imagePoints.resize(1);
+
+	// Loop over all frames in a video & finds the image points
+	cv::Mat frame;
+	for (int i = 0; i < frameCount; i += 50)
+	{
+		if (i % 100 == 0)
+			printf("%i\n", i);
+		// Clear the image points of the current frame just to be sure
+		imagePoints[imageCount].clear();
+
+		// Get the current frame from the video
+		video.set(CAP_PROP_POS_FRAMES, i);
+		video >> frame;
+
+		// Finds the checkerboard in the video frame
+		bool found = cv::findChessboardCorners(frame, cv::Size(cb_width, cb_height), imagePoints[imageCount]);
+		if (found == true)
+		{
+			imageCount++;
+			imagePoints.resize(imageCount+1);
+		}
+	}
+
+	cv::Mat cameraMatrix = cv::Mat::eye(3, 3, CV_32FC1), distCoeffs;
+	cv::Mat distCoefs;
+	std::vector<cv::Mat> rvecs, tvecs;
+
+	std::vector<float> reprojErrs;
+	double totalAvgErr = 0;
+
+	// Get the current frame from the video
+	cv::Size imageSize = cv::Size(frame.cols, frame.rows);
+
+	// File the vector with the pre-calculated worldspace positions
+	imagePoints.pop_back();
+
+	std::vector<std::vector<cv::Point3f>> objectPoints(1);
+	objectPoints[0] = worldSpace;
+	objectPoints.resize(imagePoints.size(), objectPoints[0]);
+
+	// Calibrate camera call
+	int flags = cv::CALIB_FIX_ASPECT_RATIO + cv::CALIB_FIX_K3 + cv::CALIB_ZERO_TANGENT_DIST + cv::CALIB_FIX_PRINCIPAL_POINT;
+	double rms = calibrateCamera(objectPoints, imagePoints, imageSize, cameraMatrix, distCoeffs, rvecs, tvecs, flags | cv::CALIB_FIX_K4 | cv::CALIB_FIX_K5);
+
+	// Display matrix found to the console
+	fs = cv::FileStorage(data_path + out_fname, cv::FileStorage::WRITE);
+	fs << "CameraMatrix" << cameraMatrix;
+	fs << "DistortionCoeffs" << distCoeffs;
+	fs.release();
+	return true;
+}
+
 /**
  * - Determine the camera's extrinsics based on a checkerboard image and the camera intrinsics
  * - Allows for hand pointing the checkerboard corners

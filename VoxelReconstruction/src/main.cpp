@@ -10,7 +10,7 @@ int main(
 		int argc, char** argv)
 {
 	VoxelReconstruction::showKeys();
-	VoxelReconstruction vr("data" + std::string(PATH_SEP), 4);
+	VoxelReconstruction vr("./data" + std::string(PATH_SEP), 4);
 	vr.run(argc, argv);
 
 	return EXIT_SUCCESS;

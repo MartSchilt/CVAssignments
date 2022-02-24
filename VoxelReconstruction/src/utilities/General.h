@@ -37,6 +37,7 @@ class General
 public:
 	static const std::string CBConfigFile;
 	static const std::string IntrinsicsFile;
+	static const std::string IntrinsicsVideo;
 	static const std::string CalibrationVideo;
 	static const std::string CheckerboadVideo;
 	static const std::string CheckerboadCorners;

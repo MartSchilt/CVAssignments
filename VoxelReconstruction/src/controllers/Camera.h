@@ -70,6 +70,7 @@ public:
 	cv::Mat& getVideoFrame(int);
 	void setVideoFrame(int);
 
+	static bool detIntrinsics(const std::string& data_path, const std::string& checker_vid_fname, const std::string& out_fname);
 	static bool detExtrinsics(const std::string &, const std::string &, const std::string &, const std::string &);
 
 	static cv::Point projectOnView(const cv::Point3f &, const cv::Mat &, const cv::Mat &, const cv::Mat &, const cv::Mat &);

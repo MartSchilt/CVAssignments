@@ -7,6 +7,9 @@
 
 #include "Scene3DRenderer.h"
 
+#include <algorithm>
+#include <opencv2/core/types.hpp>
+
 #include <opencv2/core/mat.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
