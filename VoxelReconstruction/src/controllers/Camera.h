@@ -29,6 +29,7 @@ class Camera
 	const std::string m_cam_props_file;             // Camera properties filename
 	const int m_id;                                 // Camera ID
 
+	cv::Mat m_background;
 	std::vector<cv::Mat> m_bg_hsv_channels;          // Background HSV channel images
 	cv::Mat m_foreground_image;                      // This camera's foreground image (binary)
 
@@ -70,6 +71,7 @@ public:
 	cv::Mat& getVideoFrame(int);
 	void setVideoFrame(int);
 
+	static bool detBackground(const std::string& data_path, const std::string& background_vid, const std::string& out_fname);
 	static bool detIntrinsics(const std::string& data_path, const std::string& checker_vid_fname, const std::string& out_fname);
 	static bool detExtrinsics(const std::string &, const std::string &, const std::string &, const std::string &);
 
@@ -109,6 +111,11 @@ public:
 	const std::vector<cv::Mat>& getBgHsvChannels() const
 	{
 		return m_bg_hsv_channels;
+	}
+
+	const cv::Mat GetBackground() const
+	{
+		return m_background;
 	}
 
 	bool isInitialized() const

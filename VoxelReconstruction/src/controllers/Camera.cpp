@@ -60,21 +60,18 @@ bool Camera::initialize()
 
 	Mat bg_image;
 	VideoCapture vid;
-	if (General::fexists(m_data_path + General::BackgroundVideoFile))
+	if (General::fexists(m_data_path + General::BackgroundImageFile))
 	{
-		//bg_image = imread(m_data_path + General::BackgroundImageFile);
-		vid = VideoCapture(General::BackgroundVideoFile);
-		vid.set(CAP_PROP_POS_FRAMES, 0);
-		vid >> bg_image;
+		bg_image = imread(m_data_path + General::BackgroundImageFile);
 		if (bg_image.empty())
 		{
-			cout << "Unable to read: " << m_data_path + General::BackgroundVideoFile;
+			cout << "Unable to read: " << m_data_path + General::BackgroundImageFile;
 			return false;
 		}
 	}
 	else
 	{
-		cout << "Unable to find background video: " << m_data_path + General::BackgroundVideoFile;
+		cout << "Unable to find background iamge: " << m_data_path + General::BackgroundImageFile;
 		return false;
 	}
 	assert(!bg_image.empty());
@@ -82,6 +79,7 @@ bool Camera::initialize()
 	// Disect the background image in HSV-color space
 	Mat bg_hsv_im;
 	cvtColor(bg_image, bg_hsv_im, CV_BGR2HSV);
+	m_background = bg_hsv_im;
 	split(bg_hsv_im, m_bg_hsv_channels);
 
 	// Open the video for this camera
@@ -197,6 +195,20 @@ void Camera::onMouse(
 	default:
 		break;
 	}
+}
+
+bool Camera::detBackground(const std::string& data_path, const std::string& background_vid, const std::string& out_fname)
+{
+	cv::Mat bgImage;
+	VideoCapture video = VideoCapture(data_path + background_vid);
+
+	// Get the current frame from the video
+	video.set(CAP_PROP_POS_FRAMES, 0);
+	video >> bgImage;
+	video.release();
+
+	cv::imwrite(data_path + out_fname, bgImage);
+	return false;
 }
 
 bool Camera::detIntrinsics(const string& data_path, const string& checker_vid_fname, const string& out_fname)
