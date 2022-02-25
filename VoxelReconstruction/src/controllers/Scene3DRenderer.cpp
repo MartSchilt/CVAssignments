@@ -137,21 +137,18 @@ void Scene3DRenderer::processForeground(
 	Mat tmp, foreground, background, blur;
 	absdiff(channels[0], camera->getBgHsvChannels().at(0), tmp);
 	//adaptiveThreshold(tmp, foreground, 255, cv::ADAPTIVE_THRESH_MEAN_C, cv::THRESH_BINARY, 11, 2);
-	cv::GaussianBlur(tmp, blur, Size(5, 5), 0);
-	threshold(blur, foreground, 0, 255, CV_THRESH_BINARY + CV_THRESH_OTSU);
+	threshold(tmp, foreground, 0, 255, CV_THRESH_BINARY + CV_THRESH_OTSU);
 
 	// Background subtraction S
 	absdiff(channels[1], camera->getBgHsvChannels().at(1), tmp);
 	//adaptiveThreshold(tmp, background, 255, cv::ADAPTIVE_THRESH_MEAN_C, cv::THRESH_BINARY, 11, 2);
-	cv::GaussianBlur(tmp, blur, Size(5, 5), 0);
-	threshold(blur, background, 0, 255, CV_THRESH_BINARY + CV_THRESH_OTSU);
+	threshold(tmp, background, 0, 255, CV_THRESH_BINARY + CV_THRESH_OTSU);
 	bitwise_and(foreground, background, foreground);
 	
 	// Background subtraction V
 	absdiff(channels[2], camera->getBgHsvChannels().at(2), tmp);
 	//adaptiveThreshold(tmp, background, 255, cv::ADAPTIVE_THRESH_MEAN_C, cv::THRESH_BINARY, 11, 2);
-	cv::GaussianBlur(tmp, blur, Size(5,5), 0);
-	threshold(blur, background, 0, 255, CV_THRESH_BINARY + CV_THRESH_OTSU);
+	threshold(tmp, background, 0, 255, CV_THRESH_BINARY + CV_THRESH_OTSU);
 	bitwise_or(foreground, background, foreground);
 
 	// Improve the foreground image

@@ -199,15 +199,18 @@ void Camera::onMouse(
 
 bool Camera::detBackground(const std::string& data_path, const std::string& background_vid, const std::string& out_fname)
 {
-	cv::Mat bgImage;
+	cv::Mat bgImage, bgBlur;
 	VideoCapture video = VideoCapture(data_path + background_vid);
 
 	// Get the current frame from the video
 	video.set(CAP_PROP_POS_FRAMES, 0);
 	video >> bgImage;
 	video.release();
+	
+	// Apply guassianblur for background subtraction
+	cv::GaussianBlur(bgImage, bgBlur, Size(5, 5), 0);
 
-	cv::imwrite(data_path + out_fname, bgImage);
+	cv::imwrite(data_path + out_fname, bgBlur);
 	return false;
 }
 

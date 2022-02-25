@@ -111,8 +111,10 @@ void VoxelReconstruction::run(int argc, char** argv)
 	for (int v = 0; v < m_cam_views_amount; ++v)
 	{
 		// Determine the intrinsics of each camera and write it to the xml file
+		// Needed to run this only once so for now commented
 		// bool has_cam_i = Camera::detIntrinsics(m_cam_views[v]->getDataPath(), General::IntrinsicsVideo, General::IntrinsicsFile);
-		//bool has_bg = Camera::detBackground(m_cam_views[v]->getDataPath(), General::BackgroundVideoFile, General::BackgroundImageFile);
+		// Determine background image and save it for later use
+		// bool has_bg = Camera::detBackground(m_cam_views[v]->getDataPath(), General::BackgroundVideoFile, General::BackgroundImageFile);
 		bool has_cam = Camera::detExtrinsics(m_cam_views[v]->getDataPath(), General::CheckerboadVideo,
 				General::IntrinsicsFile, m_cam_views[v]->getCamPropertiesFile());
 		assert(has_cam);
