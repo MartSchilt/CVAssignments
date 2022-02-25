@@ -134,22 +134,25 @@ void Scene3DRenderer::processForeground(
 	split(hsv_image, channels);  // Split the HSV-channels for further analysis
 
 	// Background subtraction H
-	Mat tmp, foreground, background;
-	absdiff(hsv_image, camera->GetBackground(), tmp);
-	adaptiveThreshold(tmp, background, 255, cv::ADAPTIVE_THRESH_MEAN_C, cv::THRESH_BINARY, 11, 12);
-	//threshold(tmp, foreground, m_h_threshold, 255, CV_THRESH_BINARY);
+	Mat tmp, foreground, background, blur;
+	absdiff(channels[0], camera->getBgHsvChannels().at(0), tmp);
+	//adaptiveThreshold(tmp, foreground, 255, cv::ADAPTIVE_THRESH_MEAN_C, cv::THRESH_BINARY, 11, 2);
+	cv::GaussianBlur(tmp, blur, Size(5, 5), 0);
+	threshold(blur, foreground, 0, 255, CV_THRESH_BINARY + CV_THRESH_OTSU);
 
 	// Background subtraction S
-	//absdiff(channels[1], camera->getBgHsvChannels().at(1), tmp);
-	//adaptiveThreshold(tmp, background, 255, cv::ADAPTIVE_THRESH_MEAN_C, cv::THRESH_BINARY, 11, 12);
-	////threshold(tmp, background, m_s_threshold, 255, CV_THRESH_BINARY);
-	//bitwise_and(foreground, background, foreground);
-	//
-	//// Background subtraction V
-	//absdiff(channels[2], camera->getBgHsvChannels().at(2), tmp);
-	//adaptiveThreshold(tmp, background, 255, cv::ADAPTIVE_THRESH_MEAN_C, cv::THRESH_BINARY, 11, 12);
-	////threshold(tmp, background, m_v_threshold, 255, CV_THRESH_BINARY);
-	//bitwise_or(foreground, background, foreground);
+	absdiff(channels[1], camera->getBgHsvChannels().at(1), tmp);
+	//adaptiveThreshold(tmp, background, 255, cv::ADAPTIVE_THRESH_MEAN_C, cv::THRESH_BINARY, 11, 2);
+	cv::GaussianBlur(tmp, blur, Size(5, 5), 0);
+	threshold(blur, background, 0, 255, CV_THRESH_BINARY + CV_THRESH_OTSU);
+	bitwise_and(foreground, background, foreground);
+	
+	// Background subtraction V
+	absdiff(channels[2], camera->getBgHsvChannels().at(2), tmp);
+	//adaptiveThreshold(tmp, background, 255, cv::ADAPTIVE_THRESH_MEAN_C, cv::THRESH_BINARY, 11, 2);
+	cv::GaussianBlur(tmp, blur, Size(5,5), 0);
+	threshold(blur, background, 0, 255, CV_THRESH_BINARY + CV_THRESH_OTSU);
+	bitwise_or(foreground, background, foreground);
 
 	// Improve the foreground image
 
