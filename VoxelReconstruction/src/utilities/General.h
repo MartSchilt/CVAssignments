@@ -43,6 +43,7 @@ public:
 	static const std::string CheckerboadCorners;
 	static const std::string VideoFile;
 	static const std::string BackgroundImageFile;
+	static const std::string BackgroundVideoFile;
 	static const std::string ConfigFile;
 
 	static bool fexists(const std::string &);
