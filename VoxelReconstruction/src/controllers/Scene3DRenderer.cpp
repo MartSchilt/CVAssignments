@@ -149,11 +149,11 @@ void Scene3DRenderer::processForeground(
 	bitwise_or(foreground, background, foreground);
 
 	// Improve the foreground image
-	int kernel_size = 17;
+	int kernel_size = 2;
 	Mat kernel = getStructuringElement(MORPH_RECT, Size(2 * kernel_size + 1, 2 * kernel_size + 1), Point(kernel_size, kernel_size));
 	cv::dilate(foreground, img, kernel);
 
-	camera->setForegroundImage(foreground);
+	camera->setForegroundImage(img);
 }
 
 /**
