@@ -31,6 +31,7 @@ namespace nl_uu_science_gmt
 {
 
 vector<Point>* Camera::m_BoardCorners;  // marked checkerboard corners
+vector<Point>* Camera::m_OuterBoardCorners;  // marked checkerboard corners
 
 Camera::Camera(
 		const string &dp, const string &cp, const int id) :
@@ -196,6 +197,30 @@ void Camera::onMouse(
 		break;
 	}
 }
+void Camera::onAutomationMouse(
+	int event, int x, int y, int flags, void* param)
+{
+	switch (event)
+	{
+	case EVENT_LBUTTONDOWN:
+		if (flags == (EVENT_FLAG_LBUTTON + EVENT_FLAG_CTRLKEY))
+		{
+			if (!m_OuterBoardCorners->empty())
+			{
+				cout << "Removed corner " << m_OuterBoardCorners->size() << "... (use Click to add)" << endl;
+				m_OuterBoardCorners->pop_back();
+			}
+		}
+		else
+		{
+			m_OuterBoardCorners->push_back(Point(x, y));
+			cout << "Added corner " << m_OuterBoardCorners->size() << "... (use CTRL+Click to remove)" << endl;
+		}
+		break;
+	default:
+		break;
+	}
+}
 
 bool Camera::detBackground(const std::string& data_path, const std::string& background_vid, const std::string& out_fname)
 {
@@ -252,7 +277,7 @@ bool Camera::detIntrinsics(const string& data_path, const string& checker_vid_fn
 
 	// Loop over all frames in a video & finds the image points
 	cv::Mat frame;
-	for (int i = 0; i < frameCount; i += 50)
+	for (int i = 0; i < frameCount; i += 10)
 	{
 		if (i % 100 == 0)
 			printf("%i\n", i);
@@ -306,7 +331,7 @@ bool Camera::detIntrinsics(const string& data_path, const string& checker_vid_fn
  * - Allows for hand pointing the checkerboard corners
  */
 bool Camera::detExtrinsics(
-		const string &data_path, const string &checker_vid_fname, const string &intr_filename, const string &out_fname)
+		const string &data_path, const string &checker_vid_fname, const string &intr_filename, const string &out_fname, bool automate_corners)
 {
 	int cb_width = 0, cb_height = 0;
 	int cb_square_size = 0;
@@ -364,10 +389,12 @@ bool Camera::detExtrinsics(
 	assert(!frame.empty());
 
 	m_BoardCorners = new vector<Point>(); //A pointer because we need access to it from static function onMouse
+	m_OuterBoardCorners = new vector<Point>(); //A pointer because we need access to it from static function onMouse
 
 	string corners_file = data_path + General::CheckerboadCorners;
 	if (General::fexists(corners_file))
 	{
+		cout << "Gathering checkerboard corners from the xml" << endl;
 		FileStorage fs;
 		fs.open(corners_file, FileStorage::READ);
 		if (fs.isOpened())
@@ -388,6 +415,104 @@ bool Camera::detExtrinsics(
 
 			assert((int ) m_BoardCorners->size() == board_size.area());
 
+			fs.release();
+		}
+	}
+	else if (automate_corners) 
+	{
+		cout << "Estimate camera extrinsics by automation..." << endl;
+		namedWindow(MAIN_WINDOW, CV_WINDOW_KEEPRATIO);
+		setMouseCallback(MAIN_WINDOW, onAutomationMouse);
+
+		cout << "Now mark the 4 outer interior corners of the checkerboard" << endl;
+		Mat canvas;
+		while ((int)m_OuterBoardCorners->size() < 4)
+		{
+			canvas = frame.clone();
+
+			if (!m_OuterBoardCorners->empty())
+			{
+				for (size_t c = 0; c < m_OuterBoardCorners->size(); c++)
+				{
+					circle(canvas, m_OuterBoardCorners->at(c), 4, Color_MAGENTA, 1, 8);
+					if (c > 0)
+						line(canvas, m_OuterBoardCorners->at(c), m_OuterBoardCorners->at(c - 1), Color_MAGENTA, 1, 8);
+				}
+			}
+
+			int key = waitKey(10);
+			if (key == 'q' || key == 'Q')
+			{
+				return false;
+			}
+			else if (key == 'c' || key == 'C')
+			{
+				m_OuterBoardCorners->pop_back();
+			}
+
+			imshow(MAIN_WINDOW, canvas);
+		}
+
+		assert((int)m_OuterBoardCorners->size() == 4);
+		cout << "Marking finished!" << endl;
+		destroyAllWindows();
+
+		// Determine the interior corners using the existing four corners
+		Point corner1 = m_OuterBoardCorners->at(0);
+		cout << "Corner1:" << corner1 << endl;
+		Point corner2 = m_OuterBoardCorners->at(1);
+		cout << "Corner2:" << corner2 << endl;
+		Point corner3 = m_OuterBoardCorners->at(2);
+		cout << "Corner3:" << corner3 << endl;
+		Point corner4 = m_OuterBoardCorners->at(3);
+		cout << "Corner4:" << corner4 << endl;
+
+		float dx1 = (corner3.x - corner1.x) / (float)(board_size.height - 1);
+		float dy1 = (corner3.y - corner1.y) / (float)(board_size.height - 1);
+		float dx2 = (corner4.x - corner2.x) / (float)(board_size.height - 1);
+		float dy2 = (corner4.y - corner2.y) / (float)(board_size.height - 1);
+		Point d1_point = Point(round(dx1), round(dy1));
+		Point d2_point = Point(round(dx2), round(dy2));
+
+		m_BoardCorners->push_back(corner1);
+
+		float dx, dy;
+		Point curr_xcorner, d_point;
+		Point curr_ycorner = corner1;
+		Point end_ycorner = corner2;
+		for (int y = 0; y < board_size.height; y++) 
+		{
+			if (y != 0) {
+				m_BoardCorners->push_back(curr_ycorner);
+				cout << "Y Corner added:" << curr_ycorner << endl;
+				end_ycorner += d2_point;
+			}
+
+			dx = (end_ycorner.x - curr_ycorner.x) / (float)(board_size.width - 1);
+			dy = (end_ycorner.y - curr_ycorner.y) / (float)(board_size.width - 1);
+			d_point = Point(round(dx), round(dy));
+			curr_xcorner = curr_ycorner;
+			for (int x = 1; x < board_size.width; x++) 
+			{
+				curr_xcorner += d_point;
+				m_BoardCorners->push_back(curr_xcorner);
+				cout << "X Corner added:" << curr_xcorner << endl;
+			}
+			curr_ycorner += d1_point;
+		}
+		cout << (int)m_BoardCorners->size() << "Corners added automatically" << endl;
+
+		FileStorage fs;
+		fs.open(corners_file, FileStorage::WRITE);
+		if (fs.isOpened())
+		{
+			fs << "CornersAmount" << (int)m_BoardCorners->size();
+			for (size_t b = 0; b < m_BoardCorners->size(); ++b)
+			{
+				stringstream corner_id;
+				corner_id << "Corner_" << b;
+				fs << corner_id.str() << m_BoardCorners->at(b);
+			}
 			fs.release();
 		}
 	}

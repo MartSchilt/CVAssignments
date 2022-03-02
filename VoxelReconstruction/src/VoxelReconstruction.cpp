@@ -116,7 +116,7 @@ void VoxelReconstruction::run(int argc, char** argv)
 		// Determine background image and save it for later use
 		// bool has_bg = Camera::detBackground(m_cam_views[v]->getDataPath(), General::BackgroundVideoFile, General::BackgroundImageFile);
 		bool has_cam = Camera::detExtrinsics(m_cam_views[v]->getDataPath(), General::CheckerboadVideo,
-				General::IntrinsicsFile, m_cam_views[v]->getCamPropertiesFile());
+				General::IntrinsicsFile, m_cam_views[v]->getCamPropertiesFile(), true);
 		assert(has_cam);
 		if (has_cam) has_cam = m_cam_views[v]->initialize();
 		assert(has_cam);

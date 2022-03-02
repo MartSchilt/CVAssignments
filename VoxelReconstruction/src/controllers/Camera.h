@@ -22,6 +22,7 @@ namespace nl_uu_science_gmt
 class Camera
 {
 	static std::vector<cv::Point>* m_BoardCorners;  // marked checkerboard corners
+	static std::vector<cv::Point>* m_OuterBoardCorners;  // marked checkerboard corners
 
 	bool m_initialized;                             // Is this camera successfully initialized
 
@@ -55,6 +56,7 @@ class Camera
 	cv::Mat m_frame;                                 // Current video frame (image)
 
 	static void onMouse(int, int, int, int, void*);
+	static void onAutomationMouse(int, int, int, int, void*);
 	void initCamLoc();
 	inline void camPtInWorld();
 
@@ -73,7 +75,7 @@ public:
 
 	static bool detBackground(const std::string& data_path, const std::string& background_vid, const std::string& out_fname);
 	static bool detIntrinsics(const std::string& data_path, const std::string& checker_vid_fname, const std::string& out_fname);
-	static bool detExtrinsics(const std::string &, const std::string &, const std::string &, const std::string &);
+	static bool detExtrinsics(const std::string &, const std::string &, const std::string &, const std::string &, bool);
 
 	static cv::Point projectOnView(const cv::Point3f &, const cv::Mat &, const cv::Mat &, const cv::Mat &, const cv::Mat &);
 	cv::Point projectOnView(const cv::Point3f &);
