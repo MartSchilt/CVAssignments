@@ -165,6 +165,17 @@ void Reconstructor::update()
 	m_visible_voxels.clear();
 	std::vector<Voxel*> visible_voxels;
 
+	// ------------------------------------
+	int width = m_cameras[0]->getFrame().cols;
+	int height = m_cameras[0]->getFrame().rows;
+
+	std::vector<std::vector<double>> m_DepthMaps;
+	for (size_t c = 0; c < m_cameras.size(); ++c)
+	{
+		std::vector<double> tmp(m_cameras[c]->getFrame().rows * m_cameras[c]->getFrame().cols, 0.0f);
+		m_DepthMaps.push_back(tmp);
+	}
+
 	int v;
 #pragma omp parallel for schedule(static) private(v) shared(visible_voxels)
 	for (v = 0; v < (int)m_voxels_amount; ++v)
@@ -194,9 +205,11 @@ void Reconstructor::update()
 				{
 					dist = distance;
 					voxel->ClosestCameraIndex = c;
-
-
 				}
+
+				cv::Point2i p = voxel->camera_projection[c];
+				if (m_DepthMaps[c][p.x + p.y * width] <= 0.01f || distance < m_DepthMaps[c][p.x + p.y * width])
+					m_DepthMaps[c][p.x + p.y * width] = distance;
 			}
 
 #pragma omp critical //push_back is critical
@@ -206,6 +219,34 @@ void Reconstructor::update()
 
 	m_visible_voxels.clear();
 	m_visible_voxels.insert(m_visible_voxels.end(), visible_voxels.begin(), visible_voxels.end());
+
+
+	for (v = 0; v < (int)m_visible_voxels.size(); ++v)
+	{
+		Voxel* voxel = m_visible_voxels[v];
+
+		for (size_t c = 0; c < m_cameras.size(); ++c)
+		{
+			double distance = Dist(m_cameras[c]->getCameraLocation().x, m_cameras[c]->getCameraLocation().y, voxel->x, voxel->y);
+			if (voxel->valid_camera_projection[c])
+			{
+				cv::Point2i p = voxel->camera_projection[c];
+
+				if (distance - m_DepthMaps[c][p.x + p.y * width] <= 0.01f)
+				{
+					cv::Mat image = m_cameras[c]->getFrame();
+					cv::Vec3b color = image.at<cv::Vec3b>(p.y, p.x);
+					//printf("COLOR(%hhu, %hhu, %hhu)", color[0], color[1], color[2]);
+
+					voxel->color = cv::Scalar(color[0], color[1], color[2], 255);
+				}
+			}
+		}
+
+	}
+
+	cv::Mat image = m_cameras[1]->getFrame();
+	cv::imshow("hello ", image);
 
 	// Extract ground coordinates from all visible voxels
 	std::vector<cv::Point2f> coordinatesxy(m_visible_voxels.size());
@@ -228,12 +269,22 @@ void Reconstructor::update()
 		Voxel* voxel = m_visible_voxels[v];
 				
 		const int clusterID = labels.at<int>(v);
-		voxel->color = clusterColors[clusterID];
+		//voxel->color = clusterColors[clusterID];
 				//cv::Mat image = m_cameras[c]->getForegroundImage();
 				//image.at<cv::Scalar>(point) = clusterColors[clusterID];
 				//m_cameras[c]->setForegroundImage(image);
 				//If there's a white pixel on the foreground image at the projection point, add the camera
 			
 	}
-}
+
+	for (size_t c = 0; c < m_cameras.size(); ++c)
+	{
+		cv::Mat cimage = m_cameras[c]->getFrame();
+		for (int v = 0; v < m_visible_voxels.size(); v++)
+		{
+
+		}
+	}
+
+	}
 } /* namespace nl_uu_science_gmt */
