@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <opencv2/core/types.hpp>
+#include <opencv2/photo.hpp>
 
 #include <opencv2/core/mat.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -133,8 +134,9 @@ namespace nl_uu_science_gmt
 		vector<Mat> channels;
 		split(hsv_image, channels);  // Split the HSV-channels for further analysis
 
+
 		// Background subtraction H
-		Mat tmp, foreground, background, blur, img;
+		Mat dilation, erosion, tmp, foreground, background, blur, img;
 		absdiff(channels[0], camera->getBgHsvChannels().at(0), tmp);
 		threshold(tmp, foreground, 0, 255, CV_THRESH_BINARY + CV_THRESH_OTSU);
 
@@ -149,9 +151,19 @@ namespace nl_uu_science_gmt
 		bitwise_or(foreground, background, foreground);
 
 		// Improve the foreground image
-		int kernel_size = 2;
-		Mat kernel = getStructuringElement(MORPH_RECT, Size(2 * kernel_size + 1, 2 * kernel_size + 1), Point(kernel_size, kernel_size));
-		cv::dilate(foreground, img, kernel);
+		// First erode to remove lines then dilate to fill holes in the models
+		// Lastly erode a bit from the model to give the models a bit more of a "human" look
+		int ekernel_size = 2;
+		Mat ekernel = getStructuringElement(MORPH_RECT, Size(2 * ekernel_size + 1, 2 * ekernel_size + 1), Point(ekernel_size, ekernel_size));
+		erode(foreground, erosion, ekernel);
+
+		int dkernel_size = ekernel_size + 6;
+		Mat dkernel = getStructuringElement(MORPH_RECT, Size(2 * dkernel_size + 1, 2 * dkernel_size + 1), Point(dkernel_size, dkernel_size));
+		dilate(erosion, dilation, dkernel);
+
+		ekernel_size = 2;
+		ekernel = getStructuringElement(MORPH_RECT, Size(2 * ekernel_size + 1, 2 * ekernel_size + 1), Point(ekernel_size, ekernel_size));
+		erode(dilation, img, ekernel);
 
 		camera->setForegroundImage(img);
 	}
