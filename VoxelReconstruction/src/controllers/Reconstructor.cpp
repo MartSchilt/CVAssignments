@@ -236,9 +236,8 @@ void Reconstructor::update()
 				{
 					cv::Mat image = m_cameras[c]->getFrame();
 					cv::Vec3b color = image.at<cv::Vec3b>(p.y, p.x);
-					//printf("COLOR(%hhu, %hhu, %hhu)", color[0], color[1], color[2]);
 
-					voxel->color = cv::Scalar(color[0], color[1], color[2], 255);
+					voxel->color = cv::Scalar(color[2], color[1], color[0], 255);
 				}
 			}
 		}
