@@ -7,6 +7,10 @@
 
 #include "Glut.h"
 
+
+#include "./marching_cubes.h"
+#include <fstream>
+
 #ifdef __linux__
 #include <GL/freeglut_std.h>
 #endif
@@ -840,11 +844,149 @@ void Glut::drawArcball()
 #endif
 }
 
+struct Vertex
+{
+public:
+	Vertex() = default;
+	Vertex(float _x, float _y, float _z)
+		: x(_x)
+		, y(_y)
+		, z(_z)
+	{ }
+
+	float x, y, z;
+};
+
+struct Face
+{
+public:
+	Face() = default;
+	Face(int _t0, int _t1, int _t2)
+		: t0(_t0)
+		, t1(_t1)
+		, t2(_t2)
+	{ }
+
+	int t0, t1, t2;
+};
+
+
 /**
  * Draw all visible voxels
  */
 void Glut::drawVoxels()
 {
+#if 0
+	{
+		int index = 0;
+		std::vector<bool> arr;
+
+		vector<Reconstructor::Voxel*> a = m_Glut->getScene3d().getReconstructor().getVoxels();
+		vector<Reconstructor::Voxel*> v = m_Glut->getScene3d().getReconstructor().getVisibleVoxels();
+
+		for (size_t i = 0; i < a.size(); i++)
+		{
+			if (index >= v.size() - 1)
+			{
+				arr.push_back(false);
+			}
+			else
+			{
+				if (a[i]->x == v[index]->x && a[i]->y == v[index]->y && a[i]->z == v[index]->z)
+				{
+					arr.push_back(true);
+					index++;
+				}
+				else
+					arr.push_back(false);
+			}
+		}
+
+		// Model information
+		vector<Vertex> vertices;
+		vector<Face> faces;
+
+		int i = 0;
+		int mi = 1;
+		for (int z = 0; z < 63; z++)
+		{
+			for (int y = 0; y < 127; y++)
+			{
+				for (int x = 0; x < 127; x++)
+				{
+					vector<int> ids = { i, i+1, i+1+(128*128), i+(128*128), i+128, i+1+128, i+1+128+(128*128), i+128+(128*128) };
+					vector<Reconstructor::Voxel*> corners = {a[ids[0]], a[ids[1]], a[ids[2]], a[ids[3]], a[ids[4]], a[ids[5]], a[ids[6]], a[ids[7]], };
+
+					int cubeIndex = 0;
+					if (arr[ids[0]] == true) cubeIndex |= 1;
+					if (arr[ids[1]] == true) cubeIndex |= 2;
+					if (arr[ids[2]] == true) cubeIndex |= 4;
+					if (arr[ids[3]] == true) cubeIndex |= 8;
+					if (arr[ids[4]] == true) cubeIndex |= 16;
+					if (arr[ids[5]] == true) cubeIndex |= 32;
+					if (arr[ids[6]] == true) cubeIndex |= 64;
+					if (arr[ids[7]] == true) cubeIndex |= 128;
+
+					for (int k = 0; triangulation[cubeIndex][k] != -1; k += 3) {
+						int a0 = cornerIndexAFromEdge[triangulation[cubeIndex][k]];
+						int b0 = cornerIndexBFromEdge[triangulation[cubeIndex][k]];
+
+						int a1 = cornerIndexAFromEdge[triangulation[cubeIndex][k + 1]];
+						int b1 = cornerIndexBFromEdge[triangulation[cubeIndex][k + 1]];
+
+						int a2 = cornerIndexAFromEdge[triangulation[cubeIndex][k + 2]];
+						int b2 = cornerIndexBFromEdge[triangulation[cubeIndex][k + 2]];
+
+
+						{
+							float __x = (corners[a0]->x + corners[b0]->x) / 2.0f;
+							float __y = (corners[a0]->y + corners[b0]->y) / 2.0f;
+							float __z = (corners[a0]->z + corners[b0]->z) / 2.0f;
+							vertices.push_back(Vertex(__x, __y, __z));
+						}
+
+						{
+							float __x = (corners[a1]->x + corners[b1]->x) / 2.0f;
+							float __y = (corners[a1]->y + corners[b1]->y) / 2.0f;
+							float __z = (corners[a1]->z + corners[b1]->z) / 2.0f;
+							vertices.push_back(Vertex(__x, __y, __z));
+						}
+
+						{
+							float __x = (corners[a2]->x + corners[b2]->x) / 2.0f;
+							float __y = (corners[a2]->y + corners[b2]->y) / 2.0f;
+							float __z = (corners[a2]->z + corners[b2]->z) / 2.0f;
+							vertices.push_back(Vertex(__x, __y, __z));
+						}
+
+						faces.push_back(Face(mi+0, mi+1, mi+2));
+						mi+=3;
+					}
+					i++;
+				}
+			}
+		}
+
+		ofstream myfile;
+		myfile.open("example.obj");
+		//myfile << "\n";
+		for (int i = 0; i < vertices.size(); i++)
+		{
+			myfile << "v " << to_string(vertices[i].x) << " " << to_string(vertices[i].y) << " " << to_string(vertices[i].z) << "\n";
+		}
+		myfile << "\n";
+
+		for (int i = 0; i < faces.size(); i++)
+		{
+			myfile << "f " << to_string(faces[i].t0) << " " << to_string(faces[i].t1) << " " << to_string(faces[i].t2) << "\n";
+		}
+
+		myfile.close();
+		system("PAUSE");
+	}
+
+#endif
+
 	glPushMatrix();
 
 	// apply default translation
@@ -855,7 +997,7 @@ void Glut::drawVoxels()
 	vector<Reconstructor::Voxel*> voxels = m_Glut->getScene3d().getReconstructor().getVisibleVoxels();
 	for (size_t v = 0; v < voxels.size(); v++)
 	{
-		glColor4f(0.5f, 0.5f, 0.5f, 0.5f);
+		glColor4f(voxels[v]->color[0], voxels[v]->color[1], voxels[v]->color[2], 1.0f);
 		glVertex3f((GLfloat) voxels[v]->x, (GLfloat) voxels[v]->y, (GLfloat) voxels[v]->z);
 	}
 

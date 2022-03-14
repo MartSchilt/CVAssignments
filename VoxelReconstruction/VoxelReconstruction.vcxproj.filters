@@ -59,5 +59,6 @@
     <ClInclude Include="src\controllers\Scene3DRenderer.h">
       <Filter>src\controllers</Filter>
     </ClInclude>
+    <ClInclude Include="src\controllers\marching_cubes.h" />
   </ItemGroup>
 </Project>

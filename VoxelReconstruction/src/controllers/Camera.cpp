@@ -252,7 +252,7 @@ bool Camera::detIntrinsics(const string& data_path, const string& checker_vid_fn
 
 	// Loop over all frames in a video & finds the image points
 	cv::Mat frame;
-	for (int i = 0; i < frameCount; i += 50)
+	for (int i = 0; i < frameCount; i += 10)
 	{
 		if (i % 100 == 0)
 			printf("%i\n", i);
@@ -292,6 +292,8 @@ bool Camera::detIntrinsics(const string& data_path, const string& checker_vid_fn
 	// Calibrate camera call
 	int flags = cv::CALIB_FIX_ASPECT_RATIO + cv::CALIB_FIX_K3 + cv::CALIB_ZERO_TANGENT_DIST + cv::CALIB_FIX_PRINCIPAL_POINT;
 	double rms = calibrateCamera(objectPoints, imagePoints, imageSize, cameraMatrix, distCoeffs, rvecs, tvecs, flags | cv::CALIB_FIX_K4 | cv::CALIB_FIX_K5);
+
+	printf("Done!\n");
 
 	// Write and display matrix found to the console
 	fs = cv::FileStorage(data_path + out_fname, cv::FileStorage::WRITE);

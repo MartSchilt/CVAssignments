@@ -24,6 +24,7 @@
     <ClInclude Include="src\controllers\arcball.h" />
     <ClInclude Include="src\controllers\Camera.h" />
     <ClInclude Include="src\controllers\Glut.h" />
+    <ClInclude Include="src\controllers\marching_cubes.h" />
     <ClInclude Include="src\controllers\Reconstructor.h" />
     <ClInclude Include="src\controllers\Scene3DRenderer.h" />
     <ClInclude Include="src\utilities\General.h" />
