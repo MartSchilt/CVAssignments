@@ -8,7 +8,7 @@
 #include "Glut.h"
 
 
-#include "./marching_cubes.h"
+// #include "./marching_cubes.h"
 #include <fstream>
 
 #ifdef __linux__

@@ -125,46 +125,6 @@ namespace nl_uu_science_gmt
 	 */
 	void Scene3DRenderer::processForeground(
 		Camera* camera)
-{
-	assert(!camera->getFrame().empty());
-	Mat hsv_image;
-	cvtColor(camera->getFrame(), hsv_image, CV_BGR2HSV);  // from BGR to HSV color space
-
-	vector<Mat> channels;
-	split(hsv_image, channels);  // Split the HSV-channels for further analysis
-
-	// Background subtraction H
-	Mat tmp, foreground, background, blur, img;
-	absdiff(channels[0], camera->getBgHsvChannels().at(0), tmp);
-	threshold(tmp, foreground, 0, 255, CV_THRESH_BINARY + CV_THRESH_OTSU);
-
-	// Background subtraction S
-	absdiff(channels[1], camera->getBgHsvChannels().at(1), tmp);
-	threshold(tmp, background, 0, 255, CV_THRESH_BINARY + CV_THRESH_OTSU);
-	bitwise_and(foreground, background, foreground);
-	
-	// Background subtraction V
-	absdiff(channels[2], camera->getBgHsvChannels().at(2), tmp);
-	threshold(tmp, background, 0, 255, CV_THRESH_BINARY + CV_THRESH_OTSU);
-	bitwise_or(foreground, background, foreground);
-
-	// Improve the foreground image
-	int kernel_size = 2;
-	Mat kernel = getStructuringElement(MORPH_RECT, Size(2 * kernel_size + 1, 2 * kernel_size + 1), Point(kernel_size, kernel_size));
-	cv::dilate(foreground, img, kernel);
-
-	camera->setForegroundImage(img);
-}
-
-/**
- * Set currently visible camera to the given camera id
- */
-void Scene3DRenderer::setCamera(
-		int camera)
-{
-	m_camera_view = true;
-
-	if (m_current_camera != camera)
 	{
 		assert(!camera->getFrame().empty());
 		Mat hsv_image;
