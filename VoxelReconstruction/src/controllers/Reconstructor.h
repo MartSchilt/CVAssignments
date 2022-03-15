@@ -9,6 +9,8 @@
 #define RECONSTRUCTOR_H_
 
 #include <opencv2/core/core.hpp>
+#include <opencv2/opencv.hpp>
+
 #include <stddef.h>
 #include <vector>
 
@@ -46,7 +48,11 @@ private:
 	std::vector<Voxel*> m_voxels;           // Pointer vector to all voxels in the half-space
 	std::vector<Voxel*> m_visible_voxels;   // Pointer vector to all visible voxels
 
+	std::vector<std::vector<cv::Ptr<cv::ml::EM>>> m_color_models; // std::vector of color models per camera
+	std::vector<std::vector<cv::Point2f>> center_coordinates;	// Coordinates of centers per cluster in every frame
+
 	void initialize();
+	void generateForegroundImage(Camera* _camera);
 
 public:
 	Reconstructor(

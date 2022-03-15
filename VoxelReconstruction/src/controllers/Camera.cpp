@@ -639,4 +639,9 @@ Point Camera::projectOnView(
 	return projectOnView(coords, m_rotation_values, m_translation_values, m_camera_matrix, m_distortion_coeffs);
 }
 
+double Camera::getCurrentFrameIndex()
+{
+	return m_video.get(CAP_PROP_POS_FRAMES);
+}
+
 } /* namespace nl_uu_science_gmt */

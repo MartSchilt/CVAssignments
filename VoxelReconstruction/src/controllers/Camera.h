@@ -103,6 +103,8 @@ public:
 		m_video = video;
 	}
 
+	double getCurrentFrameIndex();
+
 	long getFramesAmount() const
 	{
 		return m_frame_amount;

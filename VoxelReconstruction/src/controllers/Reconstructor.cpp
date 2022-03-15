@@ -5,7 +5,18 @@
  *      Author: coert
  */
 
+#include <opencv2/core/types.hpp>
+
 #include "Reconstructor.h"
+
+#include <algorithm>
+#include <opencv2/core/types.hpp>
+#include <opencv2/photo.hpp>
+
+#include <opencv2/core/mat.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/imgproc/types_c.h>
 
 #include <opencv2/core/mat.hpp>
 #include <opencv2/core/operations.hpp>
@@ -42,7 +53,33 @@ Reconstructor::Reconstructor(
 	const size_t edge = 2 * m_height;
 	m_voxels_amount = (edge / m_step) * (edge / m_step) * (m_height / m_step);
 
+	vector<Point2f> temp = vector<Point2f>(NULL);
+	for (size_t i = 0; i < 4; i++)
+	{
+		center_coordinates.push_back(temp);
+	}
+
 	initialize();
+
+	std::vector<int> frameIDs = { 60, 2550, 175, 510};
+	for (int c = 0; c < m_cameras.size(); c++)
+	{
+		// set the frame the the correct id
+		for (int cci = 0; cci < m_cameras.size(); cci++)
+		{
+			m_cameras[cci]->setVideoFrame(frameIDs[c]);
+			m_cameras[cci]->advanceVideoFrame();
+			generateForegroundImage(m_cameras[cci]);
+		}
+
+		update();
+	}
+	// set the frame the the correct id
+	for (int cci = 0; cci < m_cameras.size(); cci++)
+	{
+		m_cameras[cci]->setVideoFrame(0);
+		m_cameras[cci]->advanceVideoFrame();
+	}
 }
 
 /**
@@ -147,6 +184,49 @@ void Reconstructor::initialize()
 
 	cout << "done!" << endl;
 }
+void Reconstructor::generateForegroundImage(Camera* camera)
+{
+	assert(!camera->getFrame().empty());
+	Mat hsv_image;
+	cvtColor(camera->getFrame(), hsv_image, CV_BGR2HSV);  // from BGR to HSV color space
+
+	vector<Mat> channels;
+	split(hsv_image, channels);  // Split the HSV-channels for further analysis
+
+
+	// Background subtraction H
+	Mat dilation, erosion, tmp, foreground, background, blur, img;
+	absdiff(channels[0], camera->getBgHsvChannels().at(0), tmp);
+	threshold(tmp, foreground, 0, 255, CV_THRESH_BINARY + CV_THRESH_OTSU);
+
+	// Background subtraction S
+	absdiff(channels[1], camera->getBgHsvChannels().at(1), tmp);
+	threshold(tmp, background, 0, 255, CV_THRESH_BINARY + CV_THRESH_OTSU);
+	bitwise_and(foreground, background, foreground);
+
+	// Background subtraction V
+	absdiff(channels[2], camera->getBgHsvChannels().at(2), tmp);
+	threshold(tmp, background, 0, 255, CV_THRESH_BINARY + CV_THRESH_OTSU);
+	bitwise_or(foreground, background, foreground);
+
+	// Improve the foreground image
+	// First erode to remove lines then dilate to fill holes in the models
+	// Lastly erode a bit from the model to give the models a bit more of a "human" look
+	int ekernel_size = 2;
+	Mat ekernel = getStructuringElement(MORPH_RECT, Size(2 * ekernel_size + 1, 2 * ekernel_size + 1), Point(ekernel_size, ekernel_size));
+	erode(foreground, erosion, ekernel);
+
+	int dkernel_size = ekernel_size + 6;
+	Mat dkernel = getStructuringElement(MORPH_RECT, Size(2 * dkernel_size + 1, 2 * dkernel_size + 1), Point(dkernel_size, dkernel_size));
+	dilate(erosion, dilation, dkernel);
+
+	ekernel_size = 2;
+	ekernel = getStructuringElement(MORPH_RECT, Size(2 * ekernel_size + 1, 2 * ekernel_size + 1), Point(ekernel_size, ekernel_size));
+	erode(dilation, img, ekernel);
+
+	camera->setForegroundImage(img);
+}
+
 double Dist(double x1, double x2, double y1, double y2)
 {
 	double x = x1 - x2;
@@ -238,21 +318,17 @@ void Reconstructor::update()
 					cv::Vec3b color = image.at<cv::Vec3b>(p.y, p.x);
 
 					voxel->color = cv::Scalar(color[2], color[1], color[0], 255);
+					voxel->ClosestCameraIndex = c;
 				}
 			}
 		}
 
 	}
 
-	cv::Mat image = m_cameras[1]->getFrame();
-	cv::imshow("hello ", image);
-
 	// Extract ground coordinates from all visible voxels
 	std::vector<cv::Point2f> coordinatesxy(m_visible_voxels.size());
 	for (int i = 0; i < m_visible_voxels.size(); i++)
 		coordinatesxy[i] = cv::Point2f(m_visible_voxels[i]->x, m_visible_voxels[i]->y);
-
-
 
 	// COlors for each cluster
 	int clusterCount = 4;
@@ -263,25 +339,140 @@ void Reconstructor::update()
 	std::vector<cv::Point2f> centers;
 	cv::kmeans(coordinatesxy, clusterCount, labels, TermCriteria(TermCriteria::COUNT | TermCriteria::EPS, 10000, 0.0001), clusterAttemots, KMEANS_PP_CENTERS, centers);
 
+	// Calculates the sizes of each cluster
+	std::vector<int> clusterSizes = { 0,0,0,0 };
+	for (int v = 0; v < m_visible_voxels.size(); v++)
+	{
+		const int clusterID = labels.at<int>(v);
+		clusterSizes[clusterID]++;
+	}
+
+	// Initialize people point Mats
+	vector<vector<Mat>> people_Points(4, { Mat(), Mat(), Mat(), Mat() });
+	for (int clust = 0; clust < 4; clust++) {
+		for (int cam = 0; cam < 4; cam++) {
+			people_Points[clust][cam] = Mat(clusterSizes[clust], 3, CV_64FC1);
+		}
+	}
+
+	std::vector<int> clusterPointIndices = { 0,0,0,0 };
 	for (v = 0; v < (int)m_visible_voxels.size(); ++v)
 	{
 		Voxel* voxel = m_visible_voxels[v];
-				
-		const int clusterID = labels.at<int>(v);
-		//voxel->color = clusterColors[clusterID];
-				//cv::Mat image = m_cameras[c]->getForegroundImage();
-				//image.at<cv::Scalar>(point) = clusterColors[clusterID];
-				//m_cameras[c]->setForegroundImage(image);
-				//If there's a white pixel on the foreground image at the projection point, add the camera
-			
+		const int clusterIdx = labels.at<int>(v);
+
+		for (size_t c = 0; c < m_cameras.size(); ++c)
+		{
+			cv::Scalar color = voxel->color;
+
+			people_Points[clusterIdx][c].at<double>(clusterPointIndices[clusterIdx], 0) = (double)color[0];
+			people_Points[clusterIdx][c].at<double>(clusterPointIndices[clusterIdx], 1) = (double)color[1];
+			people_Points[clusterIdx][c].at<double>(clusterPointIndices[clusterIdx], 2) = (double)color[2];
+		}
+		clusterPointIndices[clusterIdx]++;
 	}
 
-	for (size_t c = 0; c < m_cameras.size(); ++c)
+	if (m_color_models.size() < 4)
 	{
-		cv::Mat cimage = m_cameras[c]->getFrame();
-		for (int v = 0; v < m_visible_voxels.size(); v++)
+		std::vector<cv::Ptr<cv::ml::EM>> model;
+		for (int i = 0; i < 4; i++)
 		{
+			Ptr<cv::ml::EM> em_model = cv::ml::EM::create();
+			//Set K
+			em_model->setClustersNumber(4);
+			//Set covariance matrix type
+			em_model->setCovarianceMatrixType(cv::ml::EM::COV_MAT_SPHERICAL);
+			//Convergence condition
+			em_model->setTermCriteria(TermCriteria(TermCriteria::EPS + TermCriteria::COUNT, 100, 0.1));
 
+			//train
+			Mat training_labels;
+			em_model->trainEM(people_Points[i][1], noArray(), training_labels, noArray());
+
+			model.push_back(em_model);
+		}
+
+		m_color_models.push_back(model);
+	}
+	else
+	{
+		for (int it = 0; it < 4; it++)
+		{
+			cv::Mat sample(1, 3, CV_64FC1);
+			std::map<int, int> clusterClassifications;
+			std::vector<float> min_diffs;
+			std::vector<float> max_diffs;
+			std::vector<float> cam_bests;
+			std::vector<float> cam_labels;
+			// For each cluster
+			for (int i = 0; i < 4; i++)
+			{
+				vector<vector<double>> avg_model_likelihoods = { 4, { 0.0, 0.0, 0.0, 0.0 } };
+
+				for (int row = 0; row < people_Points[i][0].rows; row++) {
+
+
+						sample.at<double>(0) = people_Points[i][it].at<double>(row, 0);
+						sample.at<double>(1) = people_Points[i][it].at<double>(row, 1);
+						sample.at<double>(2) = people_Points[i][it].at<double>(row, 2);
+
+						for (int modelIndx = 0; modelIndx < 4; modelIndx++) {
+							//Vec2d predict = m_color_models[it][modelIndx]->predict(sample, noArray());
+							Vec2d predict2 = m_color_models[it][modelIndx]->predict2(sample, noArray());
+
+
+							double likelihood = predict2[0];
+							avg_model_likelihoods[modelIndx][0] += likelihood;
+						}
+				}
+				vector<float> local_diffs = vector<float>(3);
+
+				double prob = -10000.0f;
+				int label = 0;
+
+				//std::cout << "Predict: ";
+
+				float clusterSize = (float)people_Points[i][0].rows;
+				for (int its = 0; its < 4; its++)
+				{
+					avg_model_likelihoods[its][0] /= clusterSize;
+				//	std::cout << avg_model_likelihoods[its][0] << ", ";
+				
+
+					if (avg_model_likelihoods[its][0] > prob)
+					{
+						prob = avg_model_likelihoods[its][0];
+						label = its;
+					}
+				}
+
+			//	std::cout << std::endl;
+				clusterClassifications[i] = label;
+			}
+
+			cv::Mat frame = m_cameras[it]->getFrame();
+
+			// Assign colors to each voxel based on GMM predictions
+			for (int i = 0; i < (int)m_visible_voxels.size(); i++) {
+				Voxel* voxel = m_visible_voxels[i];
+				int clusterIdx = labels.at<int>(i);
+				double distance = Dist(m_cameras[it]->getCameraLocation().x, m_cameras[it]->getCameraLocation().y, voxel->x, voxel->y);
+
+				cv::Point2i p = voxel->camera_projection[it];
+				if (distance - m_DepthMaps[it][p.x + p.y * width] < 0.01f)
+				{
+					int label = clusterClassifications[clusterIdx];
+					//cv::Vec3b& color = frame.at<cv::Vec3b>(p.y, p.x);
+					frame.at<Vec3b>(p.y, p.x)[0] = clusterColors[label][0];
+					frame.at<Vec3b>(p.y, p.x)[1] = clusterColors[label][1];
+					frame.at<Vec3b>(p.y, p.x)[2] = clusterColors[label][2];
+
+				}
+			}
+
+			//m_cameras[it]->setForegroundImage(frame);
+			if (it == 0)
+				cv::imshow("CAMERA0", frame);
 		}
 	}
 
