@@ -298,6 +298,79 @@ void FindHighest(vector<vector<double>> avg_model_likelihoods, int& _id)
 	_id = index;
 }
 
+// Function takes in the color points to update the model over time
+// This function works by combining multiple color bins of multiple frames
+void Reconstructor::UpdateColorModel(vector<vector<Mat>> _colorPoints)
+{
+	// Add to the end of the vector
+	color_models_temp.push_back(_colorPoints);
+
+	// If there are more elements, pop the first element
+	if (color_models_temp.size() > coherence)
+		color_models_temp.erase(color_models_temp.begin());
+
+	// Iniitalize size vector
+	std::vector<std::vector<int>> sizes; sizes.resize(4);
+	for (int j = 0; j < 4; j++)
+	{
+		sizes[j].resize(4);
+		for (int k = 0; k < 4; k++)
+		{
+			sizes[j][k] = 0;
+		}
+	}
+
+	// Calculate actual sizes
+	for (int i = 0; i < color_models_temp.size(); i++)
+	{
+		for (int j = 0; j < color_models_temp[i].size(); j++)
+		{
+			for (int k = 0; k < color_models_temp[i][j].size(); k++)
+				sizes[j][k] += color_models_temp[i][j][k].rows;
+		}
+	}
+
+	// Creating mats
+	vector<vector<Mat>> color_points(4, { Mat(), Mat(), Mat(), Mat() });
+	for (int i = 0; i < 4; i++)
+		for (int j = 0; j < 4; j++)
+			color_points[i][j] = Mat(sizes[i][j], 3, CV_64FC1);
+
+	for (int i = 0; i < color_models_temp.size(); i++)
+	{
+		for (int j = 0; j < color_models_temp[i].size(); j++)
+		{
+			for (int k = 0; k < color_models_temp[i][j].size(); k++)
+			{
+				color_points[j][k].at<double>(color_models_temp[i][j][0].at<double>(0, 0), 0) = color_models_temp[i][j][0].at<double>(j, k);
+				color_points[j][k].at<double>(color_models_temp[i][j][0].at<double>(0, 0), 1) = color_models_temp[i][j][0].at<double>(j, k);
+				color_points[j][k].at<double>(color_models_temp[i][j][0].at<double>(0, 0), 2) = color_models_temp[i][j][0].at<double>(j, k);
+			}
+		}
+	}
+
+	if (m_color_models.size() < 4)
+	{
+		std::vector<cv::Ptr<cv::ml::EM>> model;
+		for (int i = 0; i < 4; i++)
+		{
+			Ptr<cv::ml::EM> em_model = cv::ml::EM::create();
+
+			em_model->setClustersNumber(4);
+			em_model->setCovarianceMatrixType(cv::ml::EM::COV_MAT_SPHERICAL);
+			em_model->setTermCriteria(TermCriteria(TermCriteria::EPS + TermCriteria::COUNT, 100, 0.1));
+
+			//train the colour model
+			Mat training_labels;
+			em_model->trainEM(color_points[i][1], noArray(), training_labels, noArray());
+
+			model.push_back(em_model);
+		}
+
+		m_color_models.push_back(model);
+	}
+}
+
 /**
  * Count the amount of camera's each voxel in the space appears on,
  * if that amount equals the amount of cameras, add that voxel to the
@@ -441,14 +514,12 @@ void Reconstructor::update()
 		for (int i = 0; i < 4; i++)
 		{
 			Ptr<cv::ml::EM> em_model = cv::ml::EM::create();
-			//Set K
+	
 			em_model->setClustersNumber(4);
-			//Set covariance matrix type
 			em_model->setCovarianceMatrixType(cv::ml::EM::COV_MAT_SPHERICAL);
-			//Convergence condition
 			em_model->setTermCriteria(TermCriteria(TermCriteria::EPS + TermCriteria::COUNT, 100, 0.1));
 
-			//train
+			//train the colour model
 			Mat training_labels;
 			em_model->trainEM(people_Points[i][1], noArray(), training_labels, noArray());
 
@@ -519,20 +590,26 @@ void Reconstructor::update()
 			cv::Mat frame = m_cameras[it]->getFrame();
 
 			// Assign colors to each voxel based on GMM predictions
-			for (int i = 0; i < (int)m_visible_voxels.size(); i++) {
-				Voxel* voxel = m_visible_voxels[i];
-				int clusterIdx = labels.at<int>(i);
-				double distance = Dist(m_cameras[it]->getCameraLocation().x, m_cameras[it]->getCameraLocation().y, voxel->x, voxel->y);
+			if (it == 0)
+			{
+				for (int i = 0; i < (int)m_visible_voxels.size(); i++) {
+					Voxel* voxel = m_visible_voxels[i];
+					int clusterIdx = labels.at<int>(i);
+					double distance = Dist(m_cameras[it]->getCameraLocation().x, m_cameras[it]->getCameraLocation().y, voxel->x, voxel->y);
 
-				cv::Point2i p = voxel->camera_projection[it];
-				if (distance - m_DepthMaps[it][p.x + p.y * width] < 0.01f)
-				{
 					int label = clusterClassifications[clusterIdx];
-					//cv::Vec3b& color = frame.at<cv::Vec3b>(p.y, p.x);
-					frame.at<Vec3b>(p.y, p.x)[0] = clusterColors[label][0];
-					frame.at<Vec3b>(p.y, p.x)[1] = clusterColors[label][1];
-					frame.at<Vec3b>(p.y, p.x)[2] = clusterColors[label][2];
+					voxel->color = cv::Scalar(clusterColors[label][2], clusterColors[label][1], clusterColors[label][0]);
 
+					cv::Point2i p = voxel->camera_projection[it];
+					if (distance - m_DepthMaps[it][p.x + p.y * width] < 0.01f)
+					{
+						int label = clusterClassifications[clusterIdx];
+						//cv::Vec3b& color = frame.at<cv::Vec3b>(p.y, p.x);
+						frame.at<Vec3b>(p.y, p.x)[0] = clusterColors[label][0];
+						frame.at<Vec3b>(p.y, p.x)[1] = clusterColors[label][1];
+						frame.at<Vec3b>(p.y, p.x)[2] = clusterColors[label][2];
+
+					}
 				}
 			}
 

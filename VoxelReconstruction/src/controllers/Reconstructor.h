@@ -51,8 +51,13 @@ private:
 	std::vector<std::vector<cv::Ptr<cv::ml::EM>>> m_color_models; // std::vector of color models per camera
 	std::vector<std::vector<cv::Point2f>> center_coordinates;	// Coordinates of centers per cluster in every frame
 
+	// Used to temporarily store the colour models while updating them
+	int coherence = 10; // Amount of frames it will take into consideration
+	std::vector<std::vector<std::vector<cv::Mat>>> color_models_temp;
+
 	void initialize();
 	void generateForegroundImage(Camera* _camera);
+	void UpdateColorModel(std::vector<std::vector<cv::Mat>> _colorPoints);
 
 public:
 	Reconstructor(
