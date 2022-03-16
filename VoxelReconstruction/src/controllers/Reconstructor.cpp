@@ -26,6 +26,9 @@
 
 #include "../utilities/General.h"
 
+#include <cmath>
+#include <cstdlib>
+
 using namespace std;
 using namespace cv;
 
@@ -235,6 +238,66 @@ double Dist(double x1, double x2, double y1, double y2)
 	return sqrt(pow(x, 2) + pow(y, 2));
 }
 
+void FindHighest(vector<vector<double>> avg_model_likelihoods, int& _id)
+{
+	std::vector<double> first; first.resize(4);
+	std::vector<double> second; second.resize(4);
+	std::vector<double> dif; dif.resize(4);
+
+	for (int i = 0; i < 4; i++)
+	{
+		if (avg_model_likelihoods[i][0] > 100)
+			continue;
+
+		first[i] = -1000;
+		second[i] = -1000;
+		for (int j = 0; j < 4; j++)
+		{
+			double t = avg_model_likelihoods[i][j];
+			double tmp = first[i];
+			if (t > first[i])
+			{
+				first[i] = t;
+				if (tmp > second[i])
+				{
+					second[i] = tmp;
+				}
+			}
+			else
+			{
+				if (t > second[i])
+				{
+					second[i] = t;
+				}
+			}
+		}
+	}
+
+	for (int i = 0; i < 4; i++)
+	{
+		if (avg_model_likelihoods[i][0] > 100)
+		{
+			dif[i] = 0.0f;
+			continue;
+		}
+
+		dif[i] = -(second[i] - first[i]);
+	}
+
+
+	int index = 0;
+	double difference = 0.0f;
+	for (int i = 0; i < 4; i++)
+	{
+		if (dif[i] > difference)
+		{
+			difference = dif[i];
+			index = i;
+		}
+	}
+	_id = index;
+}
+
 /**
  * Count the amount of camera's each voxel in the space appears on,
  * if that amount equals the amount of cameras, add that voxel to the
@@ -400,10 +463,7 @@ void Reconstructor::update()
 		{
 			cv::Mat sample(1, 3, CV_64FC1);
 			std::map<int, int> clusterClassifications;
-			std::vector<float> min_diffs;
-			std::vector<float> max_diffs;
-			std::vector<float> cam_bests;
-			std::vector<float> cam_labels;
+
 			// For each cluster
 			for (int i = 0; i < 4; i++)
 			{
@@ -412,20 +472,19 @@ void Reconstructor::update()
 				for (int row = 0; row < people_Points[i][0].rows; row++) {
 
 
-						sample.at<double>(0) = people_Points[i][it].at<double>(row, 0);
-						sample.at<double>(1) = people_Points[i][it].at<double>(row, 1);
-						sample.at<double>(2) = people_Points[i][it].at<double>(row, 2);
+					sample.at<double>(0) = people_Points[i][it].at<double>(row, 0);
+					sample.at<double>(1) = people_Points[i][it].at<double>(row, 1);
+					sample.at<double>(2) = people_Points[i][it].at<double>(row, 2);
 
-						for (int modelIndx = 0; modelIndx < 4; modelIndx++) {
-							//Vec2d predict = m_color_models[it][modelIndx]->predict(sample, noArray());
-							Vec2d predict2 = m_color_models[it][modelIndx]->predict2(sample, noArray());
+					for (int modelIndx = 0; modelIndx < 4; modelIndx++) {
+						//Vec2d predict = m_color_models[it][modelIndx]->predict(sample, noArray());
+						Vec2d predict2 = m_color_models[it][modelIndx]->predict2(sample, noArray());
 
 
-							double likelihood = predict2[0];
-							avg_model_likelihoods[modelIndx][0] += likelihood;
-						}
+						double likelihood = predict2[0];
+						avg_model_likelihoods[modelIndx][0] += likelihood;
+					}
 				}
-				vector<float> local_diffs = vector<float>(3);
 
 				double prob = -10000.0f;
 				int label = 0;
@@ -436,8 +495,8 @@ void Reconstructor::update()
 				for (int its = 0; its < 4; its++)
 				{
 					avg_model_likelihoods[its][0] /= clusterSize;
-				//	std::cout << avg_model_likelihoods[its][0] << ", ";
-				
+					//	std::cout << avg_model_likelihoods[its][0] << ", ";
+
 
 					if (avg_model_likelihoods[its][0] > prob)
 					{
@@ -446,9 +505,16 @@ void Reconstructor::update()
 					}
 				}
 
-			//	std::cout << std::endl;
+				//	std::cout << std::endl;
 				clusterClassifications[i] = label;
+
+				if ((int)m_cameras[0]->getCurrentFrameIndex() % 50 == 0 && it == 0)
+				{
+					std::cout << "Label center(" << label << "): " << centers[i] << std::endl;
+				}
 			}
+			if ((int)m_cameras[0]->getCurrentFrameIndex() % 50 == 0 && it == 0)
+				std::cout << "-------------------------------------------------\n";
 
 			cv::Mat frame = m_cameras[it]->getFrame();
 
